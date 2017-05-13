@@ -1,6 +1,16 @@
 lda2vec: Tools for interpreting natural language
 =================================================
 
+Modified lda2vec version with changes:
+
+* remove spaCy due to their limitations (only support English,...)
+* fix changes in pyxdameraulevenshtein
+* manual preprocessing:
+ * hold English alphabet, replace special characters with space
+ * automatically detect common phrases (multiword expressions) by gensim.Phrases
+ * hold maximum 20000 words by TfidfVectorizer
+ * map sentences to matrix (manually) using multiprocessing
+
 .. image:: http://img.shields.io/badge/license-MIT-blue.svg?style=flat
     :target: https://github.com/cemoody/lda2vec/blob/master/LICENSE
 
@@ -20,7 +30,7 @@ lda2vec: Tools for interpreting natural language
 
 
 The lda2vec model tries to mix the best parts of word2vec and LDA
-into a single framework. word2vec captures powerful relationships 
+into a single framework. word2vec captures powerful relationships
 between words, but the resulting vectors are largely uninterpretable
 and don't represent documents. LDA on the other hand is quite
 interpretable by humans, but doesn't model local word relationships
@@ -34,7 +44,7 @@ your own custom topic models. However, it's still research software.
 I wouldn't run this in production, Windows, and I'd only use it after you've
 decided both word2vec and LDA are inadequate and you'd like to tinker with your
 own cool models :) That said, I don't want to discourage experimentation:
-there's some limited documentation, a modicum of unit tests, and some 
+there's some limited documentation, a modicum of unit tests, and some
 interactive examples to get you started.
 
 

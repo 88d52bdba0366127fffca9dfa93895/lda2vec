@@ -28,11 +28,11 @@ class LDA2Vec(Chain):
         self.dropout_ratio = dropout_ratio
         self.word_dropout_ratio = word_dropout_ratio
         self.n_samples = n_samples
-
+    #
     def prior(self):
         dl1 = dirichlet_likelihood(self.mixture.weights)
         return dl1
-
+    #
     def fit_partial(self, rdoc_ids, rword_indices, window=5,
                     update_only_docs=False):
         doc_ids, word_indices = move(self.xp, rdoc_ids, rword_indices)

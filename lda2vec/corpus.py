@@ -1,13 +1,12 @@
-from collections import defaultdict
 import numpy as np
 import difflib
 import pandas as pd
 
-try:
-    from pyxdameraulevenshtein import damerau_levenshtein_distance_withNPArray
-except ImportError:
-    pass
+from collections import defaultdict
+from gensim.models.word2vec import Word2Vec
+from gensim.models.keyedvectors import KeyedVectors
 
+from pyxdameraulevenshtein import damerau_levenshtein_distance_ndarray
 
 class Corpus():
     _keys_frequency = None
@@ -493,12 +492,8 @@ class Corpus():
             Dictionary where keys are the loose index, and values are
             the word string.
 
-        use_spacy : bool
-            Use SpaCy to load in word vectors. Otherwise Gensim.
-
         filename : str
-            Filename for SpaCy-compatible word vectors or if use_spacy=False
-            then uses word2vec vectors via gensim.
+            Filename for word2vec vectors via gensim.
 
         Returns
         -------
@@ -517,7 +512,7 @@ class Corpus():
         >>> corpus = Corpus()
         >>> corpus.update_word_count(word_indices)
         >>> corpus.finalize()
-        >>> v, s, f = corpus.compact_word_vectors(vocab)
+        >>> v, s, f = corpus.compact_word_vectors(vocab, filename='enwiki.text.model.bin')
         >>> sim = lambda x, y: np.dot(x, y) / nl.norm(x) / nl.norm(y)
         >>> vocab[corpus.compact_to_loose[2]]
         'shuttle'
@@ -531,8 +526,7 @@ class Corpus():
         True
         """
         n_words = len(self.compact_to_loose)
-        from gensim.models.word2vec import Word2Vec
-        model = Word2Vec.load_word2vec_format(filename, binary=True)
+        model = KeyedVectors.load_word2vec_format(filename, binary=True)
         n_dim = model.syn0.shape[1]
         data = np.random.normal(size=(n_words, n_dim)).astype('float32')
         data -= data.mean()
@@ -542,47 +536,15 @@ class Corpus():
         if array is not None:
             data = array
             n_words = data.shape[0]
-        keys_raw = model.vocab.keys()
-        keys = [s.encode('ascii', 'ignore') for s in keys_raw]
-        lens = [len(s) for s in model.vocab.keys()]
-        choices = np.array(keys, dtype='S')
-        lengths = np.array(lens, dtype='int32')
-        s, f = 0, 0
-        rep0 = lambda w: w
-        rep1 = lambda w: w.replace(' ', '_')
-        rep2 = lambda w: w.title().replace(' ', '_')
-        reps = [rep0, rep1, rep2]
+        s, f = 0, 0 # success, fail, skip these
         for compact in np.arange(top):
             loose = self.compact_to_loose.get(compact, None)
-            if loose is None:
-                continue
+            if loose is None: continue
             word = vocab.get(loose, None)
-            if word is None:
-                continue
-            word = word.strip()
-            vector = None
-            for rep in reps:
-                clean = rep(word)
-                if clean in model.vocab:
-                    vector = model[clean]
-                    break
-            if vector is None:
-                try:
-                    word = unicode(word)
-                    idx = lengths >= len(word) - 3
-                    idx &= lengths <= len(word) + 3
-                    sel = choices[idx]
-                    d = damerau_levenshtein_distance_withNPArray(word, sel)
-                    choice = np.array(keys_raw)[idx][np.argmin(d)]
-                    # choice = difflib.get_close_matches(word, choices)[0]
-                    vector = model[choice]
-                    print compact, word, ' --> ', choice
-                except IndexError:
-                    pass
-            if vector is None:
-                f += 1
-                continue
-            s += 1
+            if word is None: continue
+            if word not in model.vocab: continue
+            vector = model[word]
+            if vector is None: continue
             data[compact, :] = vector[:]
         return data, s, f
 

@@ -8,6 +8,7 @@ import os.path
 import pickle
 import time
 import shelve
+import random
 
 import chainer
 from chainer import cuda
@@ -43,16 +44,16 @@ n_vocab = flattened.max() + 1
 # 'Strength' of the dircihlet prior; 200.0 seems to work well
 clambda = 200.0
 # Number of topics to fit
-n_topics = int(os.getenv('n_topics', 20))
-batchsize = 4096
+n_topics = 20
+batchsize = 4096#4096 ~ 200m, 100000 ~ 1050m, 200000 ~ 1838m
 # Power for neg sampling
-power = float(os.getenv('power', 0.75))
+power = 0.75
 # Intialize with pretrained word vectors
-pretrained = bool(int(os.getenv('pretrained', True)))
+pretrained = True
 # Sampling temperature
-temperature = float(os.getenv('temperature', 1.0))
+temperature = 1.0
 # Number of dimensions in a single word vector
-n_units = int(os.getenv('n_units', 300))
+n_units = vectors.shape[1]
 # Get the string representation for every compact key
 words = corpus.word_list(vocab)[:n_vocab]
 # How many tokens are in each document
@@ -72,33 +73,31 @@ for key in sorted(locals().keys()):
 model = LDA2Vec(n_documents=n_docs, n_document_topics=n_topics,
                 n_units=n_units, n_vocab=n_vocab, counts=term_frequency,
                 n_samples=15, power=power, temperature=temperature)
+
 if os.path.exists('lda2vec.hdf5'):
     print "Reloading from saved"
     serializers.load_hdf5("lda2vec.hdf5", model)
+
 if pretrained:
     model.sampler.W.data[:, :] = vectors[:n_vocab, :]
-model.to_gpu()
+
+model.to_gpu(gpu_id)
 optimizer = O.Adam()
 optimizer.setup(model)
 clip = chainer.optimizer.GradientClipping(5.0)
 optimizer.add_hook(clip)
 
-j = 0
-epoch = 0
 fraction = batchsize * 1.0 / flattened.shape[0]
 progress = shelve.open('progress.shelve')
+
+j = 0
+start = time.time()
 for epoch in range(200):
     data = prepare_topics(cuda.to_cpu(model.mixture.weights.W.data).copy(),
                           cuda.to_cpu(model.mixture.factors.W.data).copy(),
                           cuda.to_cpu(model.sampler.W.data).copy(),
                           words)
     top_words = print_top_words_per_topic(data)
-    if j % 100 == 0 and j > 100:
-        coherence = topic_coherence(top_words)
-        for j in range(n_topics):
-            print j, coherence[(j, 'cv')]
-        kw = dict(top_words=top_words, coherence=coherence, epoch=epoch)
-        progress[str(epoch)] = pickle.dumps(kw)
     data['doc_lengths'] = doc_lengths
     data['term_frequency'] = term_frequency
     np.savez('topics.pyldavis', **data)
@@ -119,6 +118,15 @@ for epoch in range(200):
         rate = batchsize / dt
         logs = dict(loss=float(l), epoch=epoch, j=j,
                     prior=float(prior.data), rate=rate)
-        print msg.format(**logs)
         j += 1
+        #
+    #
+    print '\nTime:', (time.time() - start), msg.format(**logs)
+    if j > 0:# and j % 500 == 0:
+        coherence = topic_coherence(top_words)
+        print '\nCoherence:'
+        for j in range(n_topics):
+            print j, coherence[(j, 'cv')]
+        kw = dict(top_words=top_words, coherence=coherence, epoch=epoch)
+        progress[str(epoch)] = pickle.dumps(kw)
     serializers.save_hdf5("lda2vec.hdf5", model)

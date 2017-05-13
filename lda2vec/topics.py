@@ -120,12 +120,10 @@ def get_request(url):
 def topic_coherence(lists, services=['ca', 'cp', 'cv', 'npmi', 'uci',
                                      'umass']):
     """ Requests the topic coherence from AKSW Palmetto
-
     Arguments
     ---------
     lists : list of lists
         A list of lists with one list of top words for each topic.
-
     >>> topic_words = [['cake', 'apple', 'banana', 'cherry', 'chocolate']]
     >>> topic_coherence(topic_words, services=['cv'])
     {(0, 'cv'): 0.5678879445677241}
